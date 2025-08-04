@@ -1,0 +1,167 @@
+import React, { createContext, useContext, useState, useCallback } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+
+// 타입 선언
+interface Toast {
+  id: number;
+  message: string;
+  type?: "info" | "success" | "error";
+  duration?: number;
+}
+interface Alert {
+  open: boolean;
+  message: string;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+  confirmText?: string;
+  cancelText?: string;
+}
+
+interface GameUIContextType {
+  showToast: (message: string, type?: Toast["type"], duration?: number) => void;
+  showAlert: (options: {
+    message: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+    confirmText?: string;
+    cancelText?: string;
+  }) => void;
+}
+
+const GameUIContext = createContext<GameUIContextType | null>(null);
+
+export function useGameUI() {
+  const ctx = useContext(GameUIContext);
+  if (!ctx) throw new Error("GameUIProvider로 감싸주세요");
+  return ctx;
+}
+
+// GameUIProvider 컴포넌트
+export const GameUIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Toast 관리
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  // Alert 관리
+  const [alert, setAlert] = useState<Alert>({
+    open: false,
+    message: "",
+    onConfirm: undefined,
+    onCancel: undefined,
+    confirmText: "확인",
+    cancelText: "취소"
+  });
+
+  // Toast
+  const showToast = useCallback((message: string, type: Toast["type"] = "info", duration = 2000) => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, message, type, duration }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration);
+  }, []);
+
+  // Alert
+  const showAlert = useCallback((opts: Omit<Alert, "open">) => {
+    setAlert({
+      open: true,
+      message: opts.message,
+      onConfirm: opts.onConfirm,
+      onCancel: opts.onCancel,
+      confirmText: opts.confirmText ?? "확인",
+      cancelText: opts.cancelText ?? "취소"
+    });
+  }, []);
+
+  const closeAlert = () => setAlert(a => ({ ...a, open: false }));
+
+  // ------ 스타일 ------
+  const toastColor = {
+    info: "from-blue-300 via-blue-200 to-white",
+    success: "from-green-400 via-green-300 to-white",
+    error: "from-rose-400 via-rose-300 to-white"
+  };
+
+  return (
+    <GameUIContext.Provider value={{ showToast, showAlert }}>
+      {children}
+
+      {/* Toast 모음 (오른쪽 상단) */}
+      <div className="fixed top-6 right-5 z-[9999] flex flex-col gap-2 pointer-events-none">
+        <AnimatePresence>
+          {toasts.map(toast => (
+            <motion.div
+              key={toast.id}
+              initial={{ x: 100, opacity: 0, scale: 0.7, rotate: 8 }}
+              animate={{ x: 0, opacity: 1, scale: 1, rotate: [8, -5, 0] }}
+              exit={{ opacity: 0, scale: 0.85, y: -50, rotate: -8 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className={`
+                pointer-events-auto
+                bg-gradient-to-r ${toastColor[toast.type ?? "info"]}
+                shadow-2xl border-2
+                ${toast.type === "success"
+                  ? "border-green-400"
+                  : toast.type === "error"
+                  ? "border-rose-400"
+                  : "border-blue-400"}
+                text-lg font-extrabold px-7 py-3 rounded-2xl flex items-center gap-2
+                tracking-wide drop-shadow-md
+                animate-[bounce_0.8s]
+              `}
+              style={{ fontFamily: "DungGeunMo, Pretendard, sans-serif", minWidth: 180 }}
+            >
+              {toast.type === "success" && <span className="text-2xl">🎉</span>}
+              {toast.type === "error" && <span className="text-2xl">⚠️</span>}
+              {toast.type === "info" && <span className="text-2xl">💬</span>}
+              <span>{toast.message}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {/* Alert */}
+      <AnimatePresence>
+        {alert.open && (
+          <motion.div
+            className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              initial={{ scale: 0.7, y: 40, rotate: 6 }}
+              animate={{ scale: 1.02, y: 0, rotate: [6, 0] }}
+              exit={{ scale: 0.6, opacity: 0, y: -40 }}
+              transition={{ type: "spring", stiffness: 360, damping: 23 }}
+              className="bg-gradient-to-br from-amber-200 via-amber-100 to-white border-4 border-amber-400 shadow-2xl rounded-3xl px-10 py-7 flex flex-col items-center text-center font-extrabold text-lg gap-6 max-w-xs"
+              style={{ fontFamily: "DungGeunMo, Pretendard, sans-serif" }}
+            >
+              <div className="text-2xl text-amber-600 drop-shadow-lg">⚔️ 알림!</div>
+              <div className="whitespace-pre-line">{alert.message}</div>
+              <div className="flex gap-4 mt-2">
+                {alert.onCancel && (
+                  <button
+                    onClick={() => {
+                      closeAlert();
+                      alert.onCancel?.();
+                    }}
+                    className="px-6 py-2 rounded-xl font-bold border-2 border-amber-400 bg-white/90 hover:bg-amber-100 text-amber-600 shadow transition"
+                  >
+                    {alert.cancelText ?? "취소"}
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    closeAlert();
+                    alert.onConfirm?.();
+                  }}
+                  className="px-6 py-2 rounded-xl font-bold border-2 border-amber-400 bg-amber-300 hover:bg-amber-400 text-amber-900 shadow transition"
+                  autoFocus
+                >
+                  {alert.confirmText ?? "확인"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </GameUIContext.Provider>
+  );
+};
