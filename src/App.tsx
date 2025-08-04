@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { NotebookPen, Layers, CalendarCheck, Menu } from "lucide-react";
-import { NotesPage } from "./components/notes/NotesPage";
+import { NotesPage } from "./components/notes/NotesPage.tsx";
 import { EmptySidebar } from "./components/EmptySidebar.tsx";
 
 // ---------- 커스텀 타이틀바 ----------
@@ -99,7 +99,7 @@ export default function App() {
   } else if (tab === "flashcards") {
     MainContent = <div className="p-8 text-gray-400 text-center">[플래시카드 기능 준비중]</div>;
     Sidebar = <EmptySidebar open={sidebarOpen || window.innerWidth >= 768} onClose={() => setSidebarOpen(false)} />;
-    pageTitle = "플래시카드";ss
+    pageTitle = "플래시카드";
   } else if (tab === "calendar") {
     MainContent = <div className="p-8 text-gray-400 text-center">[캘린더 기능 준비중]</div>;
     Sidebar = <EmptySidebar open={sidebarOpen || window.innerWidth >= 768} onClose={() => setSidebarOpen(false)} />;
@@ -110,7 +110,7 @@ export default function App() {
     <div className="h-screen w-screen flex flex-col bg-gradient-to-tr from-[#f3f3fa] to-[#e9eaff]">
       {/* 커스텀 타이틀바 */}
       <CustomTitleBar />
-      {/* 상단 네비 */}wwSSSSS
+      {/* 상단 네비 */}
       <NavBar tab={tab} setTab={setTab} />
       <div className="flex-1 flex w-full h-full relative overflow-hidden">
         {/* 모바일/작은 화면용 사이드바 토글 */}
