@@ -12,18 +12,19 @@
     "preview": "vite preview"
   },
   "build": {
-    "appId": "com.foongdoll.note", 
+    "appId": "com.foongdoll.note",
     "asar": true,
     "files": [
-      "dist", 
-      "src/main/main.cjs" 
+      "dist",
+      "src/main/main.cjs",
+      "src/main/preload.js"
     ],
     "directories": {
       "buildResources": "assets"
     },
     "win": {
-      "target": "nsis", 
-      "icon": "assets/icon.ico"
+      "target": "nsis",
+      "icon": "src/assets/icon.ico"
     }
   },
   "dependencies": {

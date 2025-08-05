@@ -12,20 +12,15 @@ function createWindow() {
       contextIsolation: true,
       webSecurity: false
     },
-    frame: false, // 커스텀 타이틀바 사용
-    titleBarStyle: "hidden", // Mac: 노치/테두리만
+    frame: false,
+    titleBarStyle: "hidden",
     title: "note",
   });
 
-  // 개발환경과 배포환경 구분
-  // if (process.env.NODE_ENV === "development") {
-  win.loadURL("http://localhost:5173");
-  // } else {
-  //   win.loadFile(path.join(__dirname, '../dist/index.html'));
-  // }
+  win.loadFile(path.join(__dirname, '..', '..', 'dist', 'index.html'));
 }
 
-
+// 윈도우 창 제어 IPC
 ipcMain.on('window-min', () => BrowserWindow.getFocusedWindow()?.minimize());
 ipcMain.on('window-max', () => {
   const win = BrowserWindow.getFocusedWindow();
@@ -34,17 +29,20 @@ ipcMain.on('window-max', () => {
 });
 ipcMain.on('window-close', () => BrowserWindow.getFocusedWindow()?.close());
 
+// 저장 경로 정의
+const DATA_DIR = path.join(app.getPath("userData"), 'noteApp');
+const NOTE_PATH = path.join(DATA_DIR, 'notes.json');
+const FLASHCARD_PATH = path.join(DATA_DIR, "flashcards.json");
+const CALENDAR_PATH = path.join(DATA_DIR, "calendar.json");
+const IMAGE_SAVE_PATH = path.join(DATA_DIR, "images");
 
-// 노트 저장 경로
-const NOTE_PATH = path.join(__dirname, 'noteApp', 'notes.json');
-// 플래시카드 저장 경로
-const FLASHCARD_PATH = path.join(__dirname, 'noteApp', "flashcards.json");
-// 캘린더 저장 경로
-const CALENDAR_PATH = path.join(__dirname, 'noteApp', "calendar.json");
+// 디렉토리 생성 유틸
+function ensureDirExists(filePath) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
 
-const IMAGE_SAVE_PATH = path.join(__dirname, 'noteApp', "images");
-
-// 데이터 읽기
+// 노트 데이터 읽기
 function loadNotes() {
   if (!fs.existsSync(NOTE_PATH)) return [];
   try {
@@ -54,12 +52,13 @@ function loadNotes() {
   }
 }
 
-// 데이터 저장
+// 노트 데이터 저장
 function saveNotes(data) {
+  ensureDirExists(NOTE_PATH);
   fs.writeFileSync(NOTE_PATH, JSON.stringify(data, null, 2), "utf-8");
 }
 
-// IPC
+// 노트 IPC
 ipcMain.handle("load-note", () => {
   return loadNotes();
 });
@@ -68,16 +67,15 @@ ipcMain.handle("save-note", (_, data) => {
   return true;
 });
 
-// 파일 저장 핸들러
-ipcMain.handle("save-image-file", async (event, { name, buffer }) => {  
-  // 디렉토리도 비동기/재귀로 생성
+// 이미지 파일 저장 핸들러
+ipcMain.handle("save-image-file", async (event, { name, buffer }) => {
   if (!fs.existsSync(IMAGE_SAVE_PATH)) await fs.promises.mkdir(IMAGE_SAVE_PATH, { recursive: true });
   const savePath = path.join(IMAGE_SAVE_PATH, Date.now() + "_" + name);
   await fs.promises.writeFile(savePath, buffer);
   return savePath;
 });
 
-// 파일 삭제 핸들러
+// 이미지 파일 삭제 핸들러
 ipcMain.handle("delete-image-file", async (event, filePath) => {
   try {
     if (fs.existsSync(filePath)) {
@@ -91,10 +89,10 @@ ipcMain.handle("delete-image-file", async (event, filePath) => {
   }
 });
 
-
 // 플래시카드 저장
 ipcMain.handle("save-flashcards", async (event, data) => {
   try {
+    ensureDirExists(FLASHCARD_PATH);
     fs.writeFileSync(FLASHCARD_PATH, JSON.stringify(data, null, 2), "utf-8");
     return true;
   } catch (e) {
@@ -115,9 +113,7 @@ ipcMain.handle("load-flashcards", async () => {
   }
 });
 
-
-
-// 일정 파일 읽기 (없으면 빈 배열 반환)
+// 캘린더 파일 읽기 (없으면 빈 배열 반환)
 function readCalendar() {
   try {
     if (!fs.existsSync(CALENDAR_PATH)) return [];
@@ -129,10 +125,10 @@ function readCalendar() {
   }
 }
 
-// 일정 파일 저장
+// 캘린더 파일 저장
 function writeCalendar(data) {
   try {
-    if (!fs.existsSync(CALENDAR_DIR)) fs.mkdirSync(CALENDAR_DIR, { recursive: true });
+    ensureDirExists(CALENDAR_PATH);
     fs.writeFileSync(CALENDAR_PATH, JSON.stringify(data, null, 2), "utf-8");
     return true;
   } catch (e) {
