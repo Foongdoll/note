@@ -3,16 +3,18 @@ import { motion } from "framer-motion";
 import { NotebookPen, Layers, CalendarCheck, Menu } from "lucide-react";
 import { NotesPage } from "./components/notes/NotesPage.tsx";
 import { EmptySidebar } from "./components/EmptySidebar.tsx";
+import { FlashcardsPage } from "./components/flashcard/FlashcardPage.tsx";
+import { CalendarPage } from "./components/calendar/CalendarPage.tsx";
 
 // ---------- 커스텀 타이틀바 ----------
 function CustomTitleBar() {
   return (
     <div
       className="w-full h-9 flex items-center px-3 justify-between bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-700 select-none"
-      style={{ WebkitAppRegion: "drag" }}
+      style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
       <span className="font-extrabold text-white tracking-wide">📝 Note</span>
-      <div className="flex items-center gap-2" style={{ WebkitAppRegion: "no-drag" }}>
+      <div className="flex items-center gap-2" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         <button
           className="w-7 h-7 rounded hover:bg-white/20 flex items-center justify-center"
           onClick={() => window.electronAPI?.windowMin?.()}
@@ -58,11 +60,10 @@ function NavBar({ tab, setTab }: { tab: string; setTab: (t: string) => void }) {
           key={item.key}
           whileTap={{ scale: 0.95 }}
           whileHover={{ y: -3, scale: 1.1 }}
-          className={`px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition-colors ${
-            tab === item.key
+          className={`px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition-colors ${tab === item.key
               ? "bg-indigo-100 text-indigo-600 shadow"
               : "hover:bg-gray-50"
-          }`}
+            }`}
           onClick={() => setTab(item.key)}
         >
           {item.icon}
@@ -93,16 +94,16 @@ export default function App() {
   let pageTitle = "";
 
   if (tab === "notes") {
-    MainContent = <NotesPage sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />;
+    MainContent = <NotesPage />;
     Sidebar = null; // NotesPage 내부에서 NoteSidebar 직접 렌더
     pageTitle = "노트";
   } else if (tab === "flashcards") {
-    MainContent = <div className="p-8 text-gray-400 text-center">[플래시카드 기능 준비중]</div>;
-    Sidebar = <EmptySidebar open={sidebarOpen || window.innerWidth >= 768} onClose={() => setSidebarOpen(false)} />;
+    MainContent = <FlashcardsPage sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />;
+    Sidebar = null; // FlashcardsPage 내부에서 FlashcardSidebar 직접 렌더
     pageTitle = "플래시카드";
   } else if (tab === "calendar") {
-    MainContent = <div className="p-8 text-gray-400 text-center">[캘린더 기능 준비중]</div>;
-    Sidebar = <EmptySidebar open={sidebarOpen || window.innerWidth >= 768} onClose={() => setSidebarOpen(false)} />;
+    MainContent = <CalendarPage/>;
+    Sidebar = <></>;
     pageTitle = "캘린더";
   }
 
@@ -114,12 +115,6 @@ export default function App() {
       <NavBar tab={tab} setTab={setTab} />
       <div className="flex-1 flex w-full h-full relative overflow-hidden">
         {/* 모바일/작은 화면용 사이드바 토글 */}
-        <button
-          className="fixed md:hidden top-3 left-3 z-40 bg-indigo-600 p-2 rounded-xl text-white shadow-lg"
-          onClick={() => setSidebarOpen(true)}
-        >
-          <Menu />
-        </button>
         {/* 메뉴별 Sidebar (Notes는 NotesPage에서 자체 렌더) */}
         {Sidebar}
         {/* 메인 컨텐츠 */}

@@ -1,2 +1,47 @@
 
 @import "tailwindcss";
+
+/* src/index.css 또는 글로벌 CSS에 추가 */
+
+.custom-md-hd h1,
+.custom-md-hd h2,
+.custom-md-hd h3,
+.custom-md-hd h4,
+.custom-md-hd h5,
+.custom-md-hd h6 {
+  position: relative;
+  padding-left: 1.3rem;
+  margin-bottom: 1.3rem;
+  border-bottom: 3px solid #6d28d9 !important; /* 진한 포인트 밑줄 */
+}
+
+.custom-md-hd h1::before,
+.custom-md-hd h2::before,
+.custom-md-hd h3::before,
+.custom-md-hd h4::before,
+.custom-md-hd h5::before,
+.custom-md-hd h6::before {
+  content: "";
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 13%;
+  width: 6px;
+  height: 75%;
+  border-radius: 6px;
+  background: linear-gradient(160deg, #6366f1 60%, #a5b4fc 100%);
+}
+
+.custom-md-hd h1 {
+  font-size: 2.2em;
+  border-bottom-color: #4f46e5;
+}
+.custom-md-hd h2 {
+  font-size: 1.6em;
+  border-bottom-color: #6366f1;
+}
+.custom-md-hd h3 {
+  font-size: 1.3em;
+  border-bottom-color: #818cf8;
+}
+/* ... h4~h6 추가 포인트 줄 수 있음 */

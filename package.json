@@ -3,24 +3,43 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "main": "src/main/main.js",
+  "main": "src/main/main.cjs",
   "scripts": {
     "electron": "electron ./src/main/main.cjs",
-    "dev": "vite",
+    "dev": "concurrently \"vite\" \"electron ./src/main/main.cjs\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
+  },
+  "build": {
+    "appId": "com.foongdoll.note", 
+    "asar": true,
+    "files": [
+      "dist", 
+      "src/main/main.cjs" 
+    ],
+    "directories": {
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": "nsis", 
+      "icon": "assets/icon.ico"
+    }
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.11",
     "@uiw/react-md-editor": "^4.0.8",
     "classnames": "^2.5.1",
+    "date-fns": "^4.1.0",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.536.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "react-markdown-editor-lite": "^1.3.4",
+    "react-router-dom": "^7.7.1",
+    "react-tooltip": "^5.29.1",
+    "remark-breaks": "^4.0.0",
     "tailwindcss": "^4.1.11"
   },
   "devDependencies": {
@@ -28,6 +47,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "concurrently": "^9.2.0",
     "electron": "^37.2.5",
     "electron-builder": "^26.0.12",
     "eslint": "^9.30.1",

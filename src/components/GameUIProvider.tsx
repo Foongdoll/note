@@ -25,7 +25,6 @@ interface Confirm {
   cancelText?: string;
 }
 
-
 interface GameUIContextType {
   showToast: (message: string, type?: Toast["type"], duration?: number) => void;
   showAlert: (options: {
@@ -75,9 +74,13 @@ export const GameUIProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Toast
   const showToast = useCallback(
-    (message: string, type: Toast["type"] = "info", duration = 2000) => {
+    (message: string, type: Toast["type"] = "info", duration = 2500) => {
       const id = Date.now() + Math.random();
       setToasts((prev) => [...prev, { id, message, type, duration, created: Date.now() }]);
+      // 자동 제거
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, duration + 200); // exit 모션 감안
     },
     []
   );
@@ -93,7 +96,6 @@ export const GameUIProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       cancelText: opts.cancelText ?? "취소"
     });
   }, []);
-
 
   const closeAlert = () => setAlert(a => ({ ...a, open: false }));
 
@@ -135,10 +137,15 @@ export const GameUIProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           {toasts.map(toast => (
             <motion.div
               key={toast.id}
-              initial={{ x: 100, opacity: 0, scale: 0.7, rotate: 8 }}
-              animate={{ x: 0, opacity: 1, scale: 1, rotate: [8, -5, 0] }}
+              initial={{ x: 120, opacity: 0, scale: 0.7, rotate: 8 }}
+              animate={{ x: 0, opacity: 1, scale: 1, rotate: [8, 0] }}
               exit={{ opacity: 0, scale: 0.85, y: -50, rotate: -8 }}
-              transition={{ type: "spring", duration: 0.4 }}
+              transition={{
+                type: "spring",
+                duration: 1.05,    // 🟢 느리게!
+                stiffness: 110,
+                damping: 22
+              }}
               className={`
                 pointer-events-auto
                 bg-gradient-to-r ${toastColor[toast.type ?? "info"]}
@@ -148,21 +155,22 @@ export const GameUIProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                   : toast.type === "error"
                     ? "border-rose-400"
                     : "border-blue-400"}
-                text-lg font-extrabold px-7 py-3 rounded-2xl flex items-center gap-2
+                text-[14px] font-bold px-4 py-2 rounded-xl flex items-center gap-2
                 tracking-wide drop-shadow-md
                 animate-[bounce_0.8s]
               `}
-              style={{ fontFamily: "DungGeunMo, Pretendard, sans-serif", minWidth: 180 }}
+              style={{ fontFamily: "DungGeunMo, Pretendard, sans-serif", minWidth: 120 }}
             >
-              {toast.type === "success" && <span className="text-2xl">🎉</span>}
-              {toast.type === "error" && <span className="text-2xl">⚠️</span>}
-              {toast.type === "info" && <span className="text-2xl">💬</span>}
+              {toast.type === "success" && <span className="text-lg">🎉</span>}
+              {toast.type === "error" && <span className="text-lg">⚠️</span>}
+              {toast.type === "info" && <span className="text-lg">💬</span>}
               <span>{toast.message}</span>
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
 
+      {/* Confirm 모달 */}
       <AnimatePresence>
         {confirm.open && (
           <motion.div
@@ -175,22 +183,27 @@ export const GameUIProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               initial={{ scale: 0.7, y: 40, rotate: 6 }}
               animate={{ scale: 1.02, y: 0, rotate: [6, 0] }}
               exit={{ scale: 0.6, opacity: 0, y: -40 }}
-              transition={{ type: "spring", stiffness: 360, damping: 23 }}
-              className="bg-gradient-to-br from-blue-200 via-white to-white border-4 border-blue-400 shadow-2xl rounded-3xl px-10 py-7 flex flex-col items-center text-center font-extrabold text-lg gap-6 max-w-xs"
+              transition={{
+                type: "spring",
+                stiffness: 220,    // 🟢 더 부드럽게!
+                damping: 28,
+                duration: 0.8
+              }}
+              className="bg-gradient-to-br from-blue-200 via-white to-white border-4 border-blue-400 shadow-2xl rounded-3xl px-6 py-5 flex flex-col items-center text-center font-bold text-[15px] gap-4 max-w-xs"
               style={{ fontFamily: "DungGeunMo, Pretendard, sans-serif" }}
             >
-              <div className="text-2xl text-blue-600 drop-shadow-lg">💡 확인!</div>
+              <div className="text-xl text-blue-600 drop-shadow-lg">💡 확인!</div>
               <div className="whitespace-pre-line">{confirm.message}</div>
-              <div className="flex gap-4 mt-2">
+              <div className="flex gap-2 mt-2">
                 <button
                   onClick={() => closeConfirm(false)}
-                  className="px-6 py-2 rounded-xl font-bold border-2 border-blue-400 bg-white/90 hover:bg-blue-100 text-blue-600 shadow transition"
+                  className="px-4 py-1.5 rounded-lg font-bold border-2 border-blue-400 bg-white/90 hover:bg-blue-100 text-blue-600 shadow transition text-[13px]"
                 >
                   {confirm.cancelText ?? "취소"}
                 </button>
                 <button
                   onClick={() => closeConfirm(true)}
-                  className="px-6 py-2 rounded-xl font-bold border-2 border-blue-400 bg-blue-300 hover:bg-blue-400 text-blue-900 shadow transition"
+                  className="px-4 py-1.5 rounded-lg font-bold border-2 border-blue-400 bg-blue-300 hover:bg-blue-400 text-blue-900 shadow transition text-[13px]"
                   autoFocus
                 >
                   {confirm.confirmText ?? "확인"}
@@ -214,20 +227,25 @@ export const GameUIProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               initial={{ scale: 0.7, y: 40, rotate: 6 }}
               animate={{ scale: 1.02, y: 0, rotate: [6, 0] }}
               exit={{ scale: 0.6, opacity: 0, y: -40 }}
-              transition={{ type: "spring", stiffness: 360, damping: 23 }}
-              className="bg-gradient-to-br from-amber-200 via-amber-100 to-white border-4 border-amber-400 shadow-2xl rounded-3xl px-10 py-7 flex flex-col items-center text-center font-extrabold text-lg gap-6 max-w-xs"
+              transition={{
+                type: "spring",
+                stiffness: 220,
+                damping: 27,
+                duration: 0.75
+              }}
+              className="bg-gradient-to-br from-amber-200 via-amber-100 to-white border-4 border-amber-400 shadow-2xl rounded-3xl px-6 py-5 flex flex-col items-center text-center font-bold text-[15px] gap-4 max-w-xs"
               style={{ fontFamily: "DungGeunMo, Pretendard, sans-serif" }}
             >
-              <div className="text-2xl text-amber-600 drop-shadow-lg">⚔️ 알림!</div>
+              <div className="text-xl text-amber-600 drop-shadow-lg">⚔️ 알림!</div>
               <div className="whitespace-pre-line">{alert.message}</div>
-              <div className="flex gap-4 mt-2">
+              <div className="flex gap-2 mt-2">
                 {alert.onCancel && (
                   <button
                     onClick={() => {
                       closeAlert();
                       alert.onCancel?.();
                     }}
-                    className="px-6 py-2 rounded-xl font-bold border-2 border-amber-400 bg-white/90 hover:bg-amber-100 text-amber-600 shadow transition"
+                    className="px-4 py-1.5 rounded-lg font-bold border-2 border-amber-400 bg-white/90 hover:bg-amber-100 text-amber-600 shadow transition text-[13px]"
                   >
                     {alert.cancelText ?? "취소"}
                   </button>
@@ -237,7 +255,7 @@ export const GameUIProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     closeAlert();
                     alert.onConfirm?.();
                   }}
-                  className="px-6 py-2 rounded-xl font-bold border-2 border-amber-400 bg-amber-300 hover:bg-amber-400 text-amber-900 shadow transition"
+                  className="px-4 py-1.5 rounded-lg font-bold border-2 border-amber-400 bg-amber-300 hover:bg-amber-400 text-amber-900 shadow transition text-[13px]"
                   autoFocus
                 >
                   {alert.confirmText ?? "확인"}
