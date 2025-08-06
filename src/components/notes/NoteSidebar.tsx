@@ -131,7 +131,7 @@ export function NoteSidebar({
                 id={`folder-tt-${node.id}`}
                 place="top"
                 delayHide={500}
-                
+
                 style={{ zIndex: 9999, fontSize: 13, fontWeight: 600 }}
               />
 
@@ -239,7 +239,7 @@ export function NoteSidebar({
             <div key={note.id} className="flex pl-7 items-center gap-1 text-[13px]">
               <span className="mr-1">📓</span>
               <input
-                className="px-1 rounded border border-indigo-100 w-20 text-[13px]"
+                className="px-1 rounded border border-indigo-100 text-[13px]"
                 value={editNoteTitle}
                 autoFocus
                 onChange={(e) => setEditNoteTitle(e.target.value)}
@@ -260,10 +260,13 @@ export function NoteSidebar({
                 }`}
             >
               <span
-                className="mr-1"
+                className="mr-1 cursor-pointer"
                 data-tooltip-id={`note-tt-${note.id}`}
                 data-tooltip-content={note.title}
-              >📓</span>
+                onClick={() => onSelectNote(node.id, note.id)} // ✅ 여기!
+              >
+                📓
+              </span>
               <Tooltip id={`note-tt-${note.id}`} place="top" />
               <span
                 className="truncate"
@@ -307,11 +310,12 @@ export function NoteSidebar({
   return (
     <aside
       className={`
-        md:static top-0 left-0 z-30
-        bg-white shadow-lg border-r flex flex-col p-4 gap-3
-        transition-all duration-300
-        ${collapsed ? "w-14" : "w-56"}
-      `}
+    md:static top-0 left-0 z-30
+    bg-white shadow-lg border-r flex flex-col p-4 gap-3
+    transition-all duration-300
+    ${collapsed ? "w-14" : "w-56"}
+  `}
+      style={{ overflowX: 'auto', minWidth: 0 }}
     >
       {/* 헤더: 폴더/접기/펼치기 */}
       <div className="flex items-center justify-between mb-3">
@@ -320,7 +324,7 @@ export function NoteSidebar({
           {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto">{tree.map(renderTree)}</div>
+      <div className="flex-1 overflow-y-auto overflow-x-auto">{tree.map(renderTree)}</div>
       {/* collapsed 아닐 때만 + 새폴더 등 노출 */}
       {!collapsed && onAddFolder && (
         <button

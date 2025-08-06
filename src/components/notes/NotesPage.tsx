@@ -337,6 +337,7 @@ export const NotesPage: React.FC = () => {
                 <div
                   className="rounded-xl border border-indigo-100 bg-gray-50 flex-1 max-h-[85%] overflow-x-auto"
                   ref={mdEditorRef}
+                  data-color-mode="light"
                   style={{ minWidth: 0, wordBreak: "break-all" }}
                 >
                   <MDEditor
@@ -385,11 +386,11 @@ export const NotesPage: React.FC = () => {
             </div>
             {noteContent ? (
               <MDEditor.Markdown
-                source={renderContent}
+                source={renderContent}                
                 className="prose custom-md-hd break-all" // 👈 핵심!
                 rehypePlugins={[rehypeKatex]}
                 remarkPlugins={[remarkBreaks, remarkGfm]}
-                style={{ wordBreak: "break-all" }}
+                style={{ wordBreak: "break-all", background: "white", color: "black" }}
               />
             ) : (
               <div className="text-gray-300 text-center py-20">
