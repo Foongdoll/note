@@ -1,8 +1,6 @@
-
 @import "tailwindcss";
 
-/* src/index.css 또는 글로벌 CSS에 추가 */
-
+/* --------- Heading Style --------- */
 .custom-md-hd h1,
 .custom-md-hd h2,
 .custom-md-hd h3,
@@ -45,3 +43,123 @@
   border-bottom-color: #818cf8;
 }
 /* ... h4~h6 추가 포인트 줄 수 있음 */
+
+/* --------- Markdown List/Checklist Styling --------- */
+
+.prose.custom-md-hd ul,
+.prose.custom-md-hd ol {
+  list-style: none !important;
+  padding-left: 1.2em;
+  margin-bottom: 1em;
+}
+
+.prose.custom-md-hd ul li,
+.prose.custom-md-hd ol li {
+  position: relative;
+  padding-left: 1.1em;
+  margin-bottom: 0.35em;
+  font-size: 1.02em;
+  min-height: 1.7em;
+}
+
+/* 1) 일반 ul-li: 앞에 아이콘 */
+.prose.custom-md-hd ul li:not(:has(input[type="checkbox"]))::before {
+  content: "🌼";
+  position: absolute;
+  left: 0;
+  top: 0.13em;
+  font-size: 1em;
+  opacity: 0.93;
+}
+
+/* 2) ol 리스트: 아이콘 안 붙임 (기본 숫자/알파벳만!) */
+.prose.custom-md-hd ol li::before {
+  content: "";
+  display: none !important;
+}
+
+/* (1) 체크박스 있는 li: 패딩 거의 없앰, 아이콘 숨김 */
+.prose.custom-md-hd ul li:has(input[type="checkbox"]),
+.prose.custom-md-hd ol li:has(input[type="checkbox"]) {
+  padding-left: 0.0em !important;
+  display: block;
+  min-height: 1.45em;
+}
+.prose.custom-md-hd ul li:has(input[type="checkbox"])::before,
+.prose.custom-md-hd ol li:has(input[type="checkbox"])::before {
+  display: none;
+}
+
+/* (2) 체크박스 input: inline-block + margin만! */
+.prose.custom-md-hd input[type="checkbox"] {
+  accent-color: #fbbf24;
+  width: 1.13em;
+  height: 1.13em;
+  margin: 0 0.42em 0 0;
+  vertical-align: middle;
+  border-radius: 0.35em;
+  background: #fff8;
+  box-shadow: 0 1px 6px #ffe47f49;
+  cursor: pointer;
+  display: inline-block;
+  position: relative;
+  top: -0.04em;
+}
+
+/* (3) 체크박스 줄바꿈, 텍스트 바로옆 */
+.prose.custom-md-hd ul li.task-list-item,
+.prose.custom-md-hd ol li.task-list-item {
+  display: block !important;
+  align-items: center;
+}
+
+/* (4) 체크박스 옆 텍스트 자연스럽게 */
+.prose.custom-md-hd ul li.task-list-item > input[type="checkbox"],
+.prose.custom-md-hd ol li.task-list-item > input[type="checkbox"] {
+  margin-top: 0;
+}
+
+/* (5) 리스트 내 리스트 살짝 들여쓰기 */
+.prose.custom-md-hd ul ul,
+.prose.custom-md-hd ol ol {
+  margin-left: 1.3em;
+  margin-top: 0.13em;
+}
+
+/* --------- 뎁스별 ol, ul 리스트 스타일링 --------- */
+
+/* 1뎁스: 숫자 (decimal) */
+.prose.custom-md-hd ol {
+  list-style-type: decimal !important;
+}
+
+/* 2뎁스: 소문자 알파벳 (lower-alpha) */
+.prose.custom-md-hd ol ol {
+  list-style-type: lower-alpha !important;
+}
+
+/* 3뎁스: 소문자 로마자 (lower-roman) */
+.prose.custom-md-hd ol ol ol {
+  list-style-type: lower-roman !important;
+}
+
+/* 4뎁스: 대문자 알파벳 (upper-alpha) */
+.prose.custom-md-hd ol ol ol ol {
+  list-style-type: upper-alpha !important;
+}
+
+/* 5뎁스: 대문자 로마자 (upper-roman) */
+.prose.custom-md-hd ol ol ol ol ol {
+  list-style-type: upper-roman !important;
+}
+
+/* ul(동그라미)도 뎁스별 커스텀 */
+.prose.custom-md-hd ul {
+  list-style-type: disc !important;
+}
+.prose.custom-md-hd ul ul {
+  list-style-type: circle !important;
+}
+.prose.custom-md-hd ul ul ul {
+  list-style-type: square !important;
+}

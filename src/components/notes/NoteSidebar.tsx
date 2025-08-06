@@ -106,7 +106,7 @@ export function NoteSidebar({
       setMenuOpenId(null)
       showToast?.("노트가 삭제되었습니다!", "success");
     }
-  };  
+  };
 
   const renderTree = (node: FolderNode, depth = 0) => (
     <div
@@ -125,8 +125,16 @@ export function NoteSidebar({
                 className="mr-1 text-indigo-400"
                 data-tooltip-id={`folder-tt-${node.id}`}
                 data-tooltip-content={node.name}
+                style={{ minWidth: 16 }}
               />
-              <Tooltip id={`folder-tt-${node.id}`} place="top" />
+              <Tooltip
+                id={`folder-tt-${node.id}`}
+                place="top"
+                delayHide={500}
+                
+                style={{ zIndex: 9999, fontSize: 13, fontWeight: 600 }}
+              />
+
               <input
                 className="font-bold px-1 rounded border border-indigo-200 w-24 text-[13px]"
                 autoFocus

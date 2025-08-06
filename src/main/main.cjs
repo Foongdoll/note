@@ -17,6 +17,7 @@ function createWindow() {
     title: "note",
   });
 
+  // win.loadURL("http://localhost:5173");
   win.loadFile(path.join(__dirname, '..', '..', 'dist', 'index.html'));
 }
 

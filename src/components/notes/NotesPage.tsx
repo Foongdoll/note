@@ -4,7 +4,8 @@ import MDEditor from "@uiw/react-md-editor";
 import { motion, AnimatePresence } from "framer-motion";
 import type { FolderNode, NoteMeta } from "../../types";
 import remarkBreaks from "remark-breaks";
-
+import rehypeKatex from "rehype-katex";
+import remarkGfm from "remark-gfm";
 
 export const NotesPage: React.FC = () => {
   const [tree, setTree] = useState<FolderNode[]>([]);
@@ -18,6 +19,11 @@ export const NotesPage: React.FC = () => {
 
   // 이미지 업로드 관련
   const mdEditorRef = useRef<HTMLDivElement>(null);
+  // 미리보기 스크롤 
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // 👉 미리보기 전용 모드 상태
+  const [previewOnly, setPreviewOnly] = useState(false);
 
   useEffect(() => {
     window.electronAPI?.loadNote?.().then((data) => {
@@ -220,12 +226,12 @@ export const NotesPage: React.FC = () => {
       if (noteTitle !== currentNote.title || noteContent !== currentNote.content) {
         handleSave({ id: currentNote.id, title: noteTitle, content: noteContent });
       }
-    }, 1000);
+    }, 15000);
 
     setAutoSaveTimer(timer);
 
     // 언마운트 시 타이머 클리어
-    return () => clearTimeout(timer);    
+    return () => clearTimeout(timer);
   }, [noteTitle, noteContent]);
 
 
@@ -271,6 +277,13 @@ export const NotesPage: React.FC = () => {
     // eslint-disable-next-line
   }, [mdEditorRef.current]);
 
+
+  useEffect(() => {
+    if (previewRef.current) {
+      previewRef.current.scrollTop = previewRef.current.scrollHeight;
+    }
+  }, [noteContent]);
+
   // 미리보기에서 C:\로 시작하는 경로 자동 치환
   const renderContent =
     noteContent.replace(
@@ -295,62 +308,89 @@ export const NotesPage: React.FC = () => {
         onDeleteNote={handleDeleteNote}
       />
       {/* 에디터+미리보기 */}
-      <div className="flex flex-1">
+      <div className="flex flex-1 items-stretch">
+        {/* 👉 미리보기 전용 모드 버튼 */}
+        <button
+          className="absolute top-5 right-8 z-20 px-4 py-1.5 rounded-xl bg-indigo-100 text-indigo-700 font-bold shadow hover:bg-indigo-200 transition"
+          onClick={() => setPreviewOnly((v) => !v)}
+          style={{ minWidth: 90 }}
+        >
+          {previewOnly ? "편집모드" : "미리보기만"}
+        </button>
+
         {/* 에디터 */}
-        <div className={`transition-all duration-300 ${sidebarCollapsed ? "max-w-[60%]" : "max-w-[50%]"} flex-1 p-6 flex flex-col relative`}>
-          {currentNote ? (
-            <motion.div
-              className="bg-white rounded-2xl shadow-xl p-6 flex flex-col gap-2 relative h-full"
-              initial={{ opacity: 0, y: 20, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-            >
-              <input
-                type="text"
-                value={noteTitle}
-                onChange={(e) => setNoteTitle(e.target.value)}
-                className="text-2xl font-extrabold mb-2 bg-transparent border-b border-indigo-200 focus:outline-none focus:border-indigo-500"
-              />
-              <div className="rounded-xl border border-indigo-100 bg-gray-50 flex-1" ref={mdEditorRef}>
-                <MDEditor
-                  value={noteContent}
-                  onChange={(v) => setNoteContent(v ?? "")}
-                  height={'100%'}
-                  preview="edit"
-                  visibleDragbar={false}                  
-                />
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.07 }}
-                className="self-end px-5 py-2 bg-indigo-600 text-white rounded-xl shadow font-bold mt-2"
-                onClick={() => handleSave({ id: currentNote.id, title: noteTitle, content: noteContent })}
+        {!previewOnly && (
+          <div className="flex-1 min-w-0 p-6 flex flex-col relative" style={{ flexBasis: "50%" }}>
+            {currentNote ? (
+              <motion.div
+                className="bg-white rounded-2xl shadow-xl p-6 flex flex-col gap-2 relative h-full"
+                initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
               >
-                저장
-              </motion.button>
-              <AnimatePresence>
-                {saved && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 0 }}
-                    animate={{ opacity: 1, y: -30 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute top-2 right-8 bg-green-400 text-white rounded-lg shadow-lg px-4 py-2"
-                  >
-                    저장됨!
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ) : (
-            <div className="text-gray-400 text-center py-20">노트를 선택하세요!</div>
-          )}
-        </div>
+                <input
+                  type="text"
+                  value={noteTitle}
+                  onChange={(e) => setNoteTitle(e.target.value)}
+                  className="text-2xl font-extrabold mb-2 bg-transparent border-b border-indigo-200 focus:outline-none focus:border-indigo-500"
+                  style={{ wordBreak: "break-all" }}
+                />
+                <div
+                  className="rounded-xl border border-indigo-100 bg-gray-50 flex-1 max-h-[85%] overflow-x-auto"
+                  ref={mdEditorRef}
+                  style={{ minWidth: 0, wordBreak: "break-all" }}
+                >
+                  <MDEditor
+                    value={noteContent}
+                    onChange={(v) => setNoteContent(v ?? "")}
+                    height={'100%'}
+                    preview="edit"
+                    visibleDragbar={false}
+                  />
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.07 }}
+                  className="self-end px-5 py-2 bg-indigo-600 text-white rounded-xl shadow font-bold mt-2"
+                  onClick={() => handleSave({ id: currentNote.id, title: noteTitle, content: noteContent })}
+                >
+                  저장
+                </motion.button>
+                <AnimatePresence>
+                  {saved && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 0 }}
+                      animate={{ opacity: 1, y: -30 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute top-2 right-8 bg-green-400 text-white rounded-lg shadow-lg px-4 py-2"
+                    >
+                      저장됨!
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            ) : (
+              <div className="text-gray-400 text-center py-20">노트를 선택하세요!</div>
+            )}
+          </div>
+        )}
+
         {/* 미리보기 */}
-        <div className="flex-1 max-w-[50%] p-6">
-          <div className="bg-white rounded-2xl shadow-xl p-6 h-full overflow-auto">
+        <div className="flex-1 min-w-0 p-6" style={{ flexBasis: "50%" }}>
+          <div
+            className="bg-white rounded-2xl shadow-xl p-6 h-full overflow-auto"
+            ref={previewRef}
+            style={{ maxHeight: "calc(100vh - 48px)", minWidth: 0 }}
+          >
             <div className="flex items-center gap-2 mb-3">
               <span className="font-bold text-indigo-500">미리보기</span>
             </div>
             {noteContent ? (
-              <MDEditor.Markdown source={renderContent} className="prose custom-md-hd" remarkPlugins={[remarkBreaks]} />
+              <MDEditor.Markdown
+                source={renderContent}
+                className="prose custom-md-hd break-all" // 👈 핵심!
+                rehypePlugins={[rehypeKatex]}
+                remarkPlugins={[remarkBreaks, remarkGfm]}
+                style={{ wordBreak: "break-all" }}
+              />
             ) : (
               <div className="text-gray-300 text-center py-20">
                 노트 내용이 없습니다
