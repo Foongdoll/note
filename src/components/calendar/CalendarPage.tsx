@@ -1,8 +1,11 @@
 // components/calendar/CalendarPage.tsx
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Calendar as CalendarIcon, Star, Plus, Trash2, CheckCircle, Edit2 } from "lucide-react";
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameDay, isSameMonth, parseISO } from "date-fns";
+import { Star, Plus, Edit2, Asterisk } from "lucide-react";
+import {
+  isAfter, format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  addDays, isSameDay, isSameMonth, parseISO, compareAsc
+} from "date-fns";
 import type { CalendarEvent, ScheduleType } from "../../types";
 
 // 달력 그리드 생성
@@ -32,12 +35,24 @@ const typeColors: Record<ScheduleType, string> = {
   일정: "bg-gray-200/70 text-gray-500",
 };
 
+// 일정 날짜 구간 배열 생성
+function getDateRangeArray(start: Date, end: Date) {
+  const dates: Date[] = [];
+  let curr = start;
+  while (!isAfter(curr, end)) {
+    dates.push(curr);
+    curr = addDays(curr, 1);
+  }
+  return dates;
+}
+
 export const CalendarPage: React.FC = () => {
   const [current, setCurrent] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CalendarEvent | null>(null);
   const [detail, setDetail] = useState<CalendarEvent | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   useEffect(() => {
     window.electronAPI?.loadEvents?.().then((data) => {
@@ -54,8 +69,6 @@ export const CalendarPage: React.FC = () => {
     } else {
       updated = [...events, e];
     }
-
-
     setEvents(updated);
     window.electronAPI?.saveEvents?.(updated);
     setModalOpen(false);
@@ -72,12 +85,23 @@ export const CalendarPage: React.FC = () => {
   // 달력 행렬
   const matrix = getMonthMatrix(current.getFullYear(), current.getMonth());
 
-  // 날짜별 일정 맵
+  // 날짜별 일정 맵 (여러개, 기간 걸친 일정 모두 포함)
   const eventsByDate: Record<string, CalendarEvent[]> = {};
   events.forEach(ev => {
-    const d = format(parseISO(ev.start), "yyyy-MM-dd");
-    if (!eventsByDate[d]) eventsByDate[d] = [];
-    eventsByDate[d].push(ev);
+    const startDate = parseISO(ev.start);
+    const endDate = parseISO(ev.end);
+    getDateRangeArray(startDate, endDate).forEach(d => {
+      const key = format(d, "yyyy-MM-dd");
+      if (!eventsByDate[key]) eventsByDate[key] = [];
+      eventsByDate[key].push(ev);
+    });
+  });
+
+  // 각 날짜별 시간순 정렬
+  Object.values(eventsByDate).forEach(evList => {
+    evList.sort((a, b) =>
+      compareAsc(parseISO(a.start), parseISO(b.start))
+    );
   });
 
   // 일정 추가 모달 기본값
@@ -96,6 +120,14 @@ export const CalendarPage: React.FC = () => {
       important: false,
     });
     setModalOpen(true);
+    setSelectedDate(format(date, "yyyy-MM-dd"));
+  };
+
+  // 하루 클릭 시 해당 날짜의 모든 일정 상세 보기
+  const openDayDetail = (date: Date) => {
+    const key = format(date, "yyyy-MM-dd");
+    setSelectedDate(key);
+    setDetail(null); // 하루 상세만 보려고
   };
 
   return (
@@ -133,7 +165,7 @@ export const CalendarPage: React.FC = () => {
             {d}
           </div>
         ))}
-        {matrix.flat().map((date, idx) => {
+        {matrix.flat().map((date) => {
           const key = format(date, "yyyy-MM-dd");
           const inMonth = isSameMonth(date, current);
           const todays = eventsByDate[key] || [];
@@ -142,13 +174,14 @@ export const CalendarPage: React.FC = () => {
             <div
               key={key}
               className={`
-                min-h-[92px] border-t border-l last:border-r p-1.5 cursor-pointer group relative
+                min-h-[100px] max-h-[220px] border-t border-l last:border-r p-1.5 cursor-pointer group relative
                 ${inMonth ? "bg-white" : "bg-gray-50 text-gray-300"}
                 ${weekDay === 0 ? "bg-pink-50" : weekDay === 6 ? "bg-blue-50" : ""}
                 rounded transition
                 hover:z-10 hover:scale-[1.04] hover:ring-2 hover:ring-indigo-200
+                overflow-y-auto
               `}
-              onClick={() => inMonth && (todays.length ? setDetail(todays[0]) : openNewEvent(date))}
+              onClick={() => openDayDetail(date)}
               style={{ fontFamily: "DungGeunMo, Pretendard, sans-serif" }}
             >
               <span
@@ -159,19 +192,31 @@ export const CalendarPage: React.FC = () => {
                 `}
               >{date.getDate()}</span>
               {/* 일정 표시 */}
-              <div className="flex flex-col gap-1 mt-4">
-                {todays.map(ev => (
-                  <div key={ev.id} className={`flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer
-                      ${typeColors[ev.type]} hover:bg-indigo-100 text-xs font-bold`}
-                    onClick={e => { e.stopPropagation(); setDetail(ev); }}>
-                    {ev.important &&
-                      <span title="중요 일정" className="mr-1">
-                        <img src="stamp.png" alt="도장" className="w-4 h-4 inline-block" style={{ filter: "drop-shadow(0 1px 0 #ea4e4e)" }} />
-                      </span>
-                    }
-                    <span className="truncate">{ev.title}</span>
-                  </div>
-                ))}
+              <div className="flex flex-col gap-1 mt-5">
+                {todays.map(ev => {
+                  // 오늘 날짜가 시작일이 아닌 경우 "예정" 표시
+                  const isFirstDay = format(parseISO(ev.start), "yyyy-MM-dd") === key;
+                  // 일정 시작/끝 시간 HH:mm
+                  const startTime = format(parseISO(ev.start), "HH:mm");
+                  return (
+                    <div key={ev.id} className={`flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer
+        ${typeColors[ev.type]} hover:bg-indigo-100 text-xs font-bold`}
+                      onClick={e => { e.stopPropagation(); setDetail(ev); setSelectedDate(key); }}>
+                      {ev.important &&
+                        <span title="중요 일정" className="mr-1">
+                          <Asterisk className="text-yellow-400 drop-shadow-[0_1px_#ca8a04] animate-pulse" size={16} fill="#facc15" stroke="#eab308" />
+                        </span>
+                      }
+                      {!isFirstDay && (
+                        <span className="bg-yellow-200 text-yellow-800 px-1 rounded mr-1 text-[10px] font-bold">
+                          예정
+                        </span>
+                      )}
+                      <span className="min-w-[35px] text-indigo-900">{isFirstDay ? startTime : ""}</span>
+                      <span className="truncate">{ev.title}</span>
+                    </div>
+                  );
+                })}
               </div>
               {/* 오늘 도장 강조 */}
               {todays.some(ev => ev.important) &&
@@ -179,7 +224,7 @@ export const CalendarPage: React.FC = () => {
                   className="absolute right-2 bottom-2 w-7 h-7 flex items-center justify-center pointer-events-none opacity-95 group-hover:scale-110 transition"
                   title="중요 일정"
                 >
-                  <Star className="text-yellow-400 drop-shadow-[0_1px_#ca8a04] animate-pulse" size={28} fill="#facc15" stroke="#eab308" />
+                  <Star className="text-yellow-400 drop-shadow-[0_1px_#ca8a04] animate-pulse" size={22} fill="#facc15" stroke="#eab308" />
                 </span>
               }
             </div>
@@ -189,7 +234,7 @@ export const CalendarPage: React.FC = () => {
 
       {/* 일정 상세/수정 모달 */}
       <AnimatePresence>
-        {(modalOpen || detail) && (
+        {(modalOpen || detail || selectedDate) && (
           <motion.div
             className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -202,14 +247,35 @@ export const CalendarPage: React.FC = () => {
                 border-4 border-indigo-100"
               style={{ fontFamily: "DungGeunMo, Pretendard, sans-serif" }}
             >
-              {editing || detail ? (
+              {/* 1. 일정 클릭: 일정 상세/수정  2. 날짜 클릭: 날짜별 전체 일정 목록 */}
+              {editing ? (
                 <EventDetailOrForm
-                  event={editing || detail!}
-                  mode={editing ? "edit" : "detail"}
-                  onClose={() => { setModalOpen(false); setEditing(null); setDetail(null); }}
+                  event={editing}
+                  mode="edit"
+                  onClose={() => { setModalOpen(false); setEditing(null); setDetail(null); setSelectedDate(null); }}
                   onSave={handleSaveEvent}
                   onDelete={handleDeleteEvent}
                   onEdit={ev => { setEditing(ev); setDetail(null); setModalOpen(true); }}
+                />
+              ) : detail ? (
+                <EventDetailOrForm
+                  event={detail}
+                  mode="detail"
+                  onClose={() => { setDetail(null); setSelectedDate(null); }}
+                  onSave={handleSaveEvent}
+                  onDelete={handleDeleteEvent}
+                  onEdit={ev => { setEditing(ev); setDetail(null); setModalOpen(true); }}
+                />
+              ) : selectedDate ? (
+                <DayEventsList
+                  date={selectedDate}
+                  events={eventsByDate[selectedDate] || []}
+                  onEventClick={ev => { setDetail(ev); }}
+                  onAdd={() => {
+                    const dt = parseISO(selectedDate + "T00:00");
+                    openNewEvent(dt);
+                  }}
+                  onClose={() => setSelectedDate(null)}
                 />
               ) : null}
             </motion.div>
@@ -220,8 +286,64 @@ export const CalendarPage: React.FC = () => {
   );
 };
 
+// ---------- 날짜별 일정 리스트 (구글 캘린더 스타일) ----------
+function DayEventsList({
+  date,
+  events,
+  onEventClick,
+  onAdd,
+  onClose,
+}: {
+  date: string;
+  events: CalendarEvent[];
+  onEventClick: (e: CalendarEvent) => void;
+  onAdd: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-lg font-bold text-indigo-700">
+          {date.replace(/-/g, ".")} 일정
+        </div>
+        <button onClick={onClose} className="text-gray-400 text-lg font-bold px-2 hover:text-indigo-400">닫기</button>
+      </div>
+      <div className="flex flex-col gap-1 max-h-[320px] overflow-y-auto mb-2">
+        {events.length === 0 && (
+          <div className="text-gray-400 text-center py-5">일정이 없습니다.</div>
+        )}
+        {events
+          .sort((a, b) => compareAsc(parseISO(a.start), parseISO(b.start)))
+          .map(ev => (
+            <div key={ev.id}
+              className={`
+                flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer shadow-sm border
+                ${typeColors[ev.type]} hover:bg-indigo-100 text-[14px] font-bold
+              `}
+              onClick={() => onEventClick(ev)}
+            >
+              <span className="text-xs text-indigo-400 min-w-[52px] text-center">
+                {format(parseISO(ev.start), "HH:mm")}~
+                {format(parseISO(ev.end), "HH:mm")}
+              </span>
+              <span className="truncate">{ev.title}</span>
+              {ev.important &&
+                <Star className="text-yellow-400 ml-1" size={18} fill="#facc15" stroke="#eab308" />
+              }
+            </div>
+          ))}
+      </div>
+      <button
+        className="w-full py-2 rounded-xl bg-indigo-500 text-white font-bold hover:bg-indigo-600 mt-1"
+        onClick={onAdd}
+      >
+        + 새 일정 추가
+      </button>
+    </div>
+  );
+}
 
-// --------- 일정 상세/수정 폼(더 귀엽게!) ---------
+// --------- 일정 상세/수정 폼 ---------
 function EventDetailOrForm({
   event,
   mode,
@@ -282,7 +404,7 @@ function EventDetailOrForm({
           />
           <span className="text-pink-500">중요</span>
           <span className="ml-1">{form.important &&
-            <Star className="text-yellow-400 drop-shadow-[0_1px_#ca8a04] animate-pulse" size={28} fill="#facc15" stroke="#eab308" />
+            <Star className="text-yellow-400 drop-shadow-[0_1px_#ca8a04] animate-pulse" size={18} fill="#facc15" stroke="#eab308" />
           }</span>
         </label>
       </div>
@@ -371,8 +493,6 @@ function EventDetailOrForm({
           <>
             <button type="submit"
               className="px-5 py-2 rounded-xl bg-green-400 text-white font-extrabold text-[15px] shadow hover:bg-green-500 transition">저장</button>
-            {/* <button type="button" onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-gray-300 text-gray-700 font-extrabold text-[14px] hover:bg-gray-400 transition">취소</button> */}
           </>
         )}
         {readonly && (

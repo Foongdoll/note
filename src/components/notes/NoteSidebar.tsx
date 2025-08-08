@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { Plus, Trash2, Pencil, MoreVertical, FilePlus, ChevronLeft, ChevronRight, Folder, FolderIcon } from "lucide-react";
+import { Plus, Trash2, Pencil, MoreVertical, FilePlus, ChevronLeft, ChevronRight, FolderIcon, Menu } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { FolderNode } from "../../types";
 import { useGameUI } from "../GameUIProvider";
@@ -40,7 +40,6 @@ export function NoteSidebar({
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // 컨텍스트 메뉴 바깥 클릭 감지
   React.useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (
@@ -55,7 +54,6 @@ export function NoteSidebar({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpenId]);
 
-  // 함수: 폴더/노트 추가·삭제·수정 등
   const handleAddFolder = (parentId?: string) => {
     onAddFolder?.(parentId);
     setMenuOpenId(null)
@@ -130,11 +128,10 @@ export function NoteSidebar({
               <Tooltip
                 id={`folder-tt-${node.id}`}
                 place="top"
-                delayHide={500}
-
+                delayHide={400}
                 style={{ zIndex: 9999, fontSize: 13, fontWeight: 600 }}
+                // 최신 react-tooltip은 portal 자동 적용됨
               />
-
               <input
                 className="font-bold px-1 rounded border border-indigo-200 w-24 text-[13px]"
                 autoFocus
@@ -151,7 +148,6 @@ export function NoteSidebar({
           )
         ) : (
           <>
-            {/* 폴더 아이콘에만 툴팁, 이름에도 툴팁 */}
             <FolderIcon
               size={15}
               className="mr-1 text-indigo-400"
@@ -161,7 +157,7 @@ export function NoteSidebar({
             />
             <Tooltip id={`folder-tt-${node.id}`} place="top" />
             <span
-              className={collapsed ? "hidden" : "truncate"}
+              className={`truncate min-w-[80px] max-w-[170px] block`}
               data-tooltip-id={!collapsed ? `folder-title-tt-${node.id}` : undefined}
               data-tooltip-content={!collapsed ? node.name : undefined}
             >
@@ -263,13 +259,13 @@ export function NoteSidebar({
                 className="mr-1 cursor-pointer"
                 data-tooltip-id={`note-tt-${note.id}`}
                 data-tooltip-content={note.title}
-                onClick={() => onSelectNote(node.id, note.id)} // ✅ 여기!
+                onClick={() => onSelectNote(node.id, note.id)}
               >
                 📓
               </span>
               <Tooltip id={`note-tt-${note.id}`} place="top" />
               <span
-                className="truncate"
+                className="truncate min-w-[80px] max-w-[170px] block"
                 data-tooltip-id={`note-title-tt-${note.id}`}
                 data-tooltip-content={note.title}
                 onClick={() => onSelectNote(node.id, note.id)}
@@ -304,36 +300,52 @@ export function NoteSidebar({
     </div>
   );
 
-
-
-  // 🟡 collapsed에 따라 width와 헤더, 버튼 변화
+   // 사이드바 본체
   return (
-    <aside
-      className={`
-    md:static top-0 left-0 z-30
-    bg-white shadow-lg border-r flex flex-col p-4 gap-3
-    transition-all duration-300
-    ${collapsed ? "w-14" : "w-56"}
-  `}
-      style={{ overflowX: 'auto', minWidth: 0 }}
-    >
-      {/* 헤더: 폴더/접기/펼치기 */}
-      <div className="flex items-center justify-between mb-3">
-        {!collapsed && <span className="font-bold text-lg text-indigo-700">폴더</span>}
-        <button onClick={onCollapse} className="p-1 rounded hover:bg-indigo-50">
-          {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto overflow-x-auto">{tree.map(renderTree)}</div>
-      {/* collapsed 아닐 때만 + 새폴더 등 노출 */}
-      {!collapsed && onAddFolder && (
+    <>
+      {/* 햄버거 버튼 - 사이드바가 닫혀있을 때만 고정(fixed) 노출 */}
+      {collapsed && (
         <button
-          className="mt-2 py-1 px-3 bg-indigo-100 hover:bg-indigo-300 text-indigo-900 font-bold rounded shadow text-xs"
-          onClick={() => onAddFolder(undefined)}
+          className="fixed top-4 left-4 z-50 bg-white shadow-lg border border-indigo-100 rounded-xl p-2 flex items-center justify-center hover:bg-indigo-50 transition"
+          style={{ width: 46, height: 46 }}
+          onClick={onCollapse}
+          aria-label="사이드바 열기"
         >
-          + 새 폴더
+          <Menu size={26} className="text-indigo-700" />
         </button>
       )}
-    </aside>
+
+      {/* 사이드바: 열려있을 때만 보임 */}
+      <aside
+        className={`
+          fixed top-0 left-0 z-40
+          bg-white shadow-lg border-r flex flex-col p-4 gap-3
+          transition-all duration-300
+          h-full
+          ${collapsed ? "w-0 min-w-0 opacity-0 pointer-events-none" : "w-56 min-w-[224px] opacity-100"}
+        `}
+        style={{
+          overflowX: "visible",
+          transition: "width 0.3s, min-width 0.3s, opacity 0.2s",
+        }}
+      >
+        {/* 헤더: 폴더/접기 */}
+        <div className="flex items-center justify-between mb-3 mt-5">
+          <span className="font-bold text-lg text-indigo-700">폴더</span>
+          <button onClick={onCollapse} className="p-1 rounded hover:bg-indigo-50" aria-label="사이드바 닫기">
+            <ChevronLeft size={22} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">{tree.map(renderTree)}</div>
+        {onAddFolder && (
+          <button
+            className="mt-2 py-1 px-3 bg-indigo-100 hover:bg-indigo-300 text-indigo-900 font-bold rounded shadow text-xs"
+            onClick={() => onAddFolder(undefined)}
+          >
+            + 새 폴더
+          </button>
+        )}
+      </aside>
+    </>
   );
 }

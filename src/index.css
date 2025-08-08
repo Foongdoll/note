@@ -55,8 +55,7 @@
 
 .prose.custom-md-hd ul li,
 .prose.custom-md-hd ol li {
-  position: relative;
-  padding-left: 1.1em;
+  position: relative;  
   margin-bottom: 0.35em;
   font-size: 1.02em;
   min-height: 1.7em;
@@ -64,7 +63,6 @@
 
 /* 1) 일반 ul-li: 앞에 아이콘 */
 .prose.custom-md-hd ul li:not(:has(input[type="checkbox"]))::before {
-  content: "🌼";
   position: absolute;
   left: 0;
   top: 0.13em;

@@ -6,6 +6,7 @@ import type { FolderNode, NoteMeta } from "../../types";
 import remarkBreaks from "remark-breaks";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import { Menu } from "lucide-react";
 
 export const NotesPage: React.FC = () => {
   const [tree, setTree] = useState<FolderNode[]>([]);
@@ -291,27 +292,65 @@ export const NotesPage: React.FC = () => {
       (match, alt, p1) => `![${alt}](file:///${p1.replace(/\\/g, "/")})`
     );
 
-  return (
+    return (
     <div className="flex w-full h-full bg-gradient-to-br from-white to-indigo-50 relative">
-      {/* 사이드바 */}
-      <NoteSidebar
-        collapsed={sidebarCollapsed}
-        onCollapse={() => setSidebarCollapsed((v) => !v)}
-        tree={tree}
-        onSelectNote={handleSelectNote}
-        selectedNoteId={selectedNoteId ?? undefined}
-        onAddNote={handleAddNote}
-        onAddFolder={handleAddFolder}
-        onRenameFolder={handleRenameFolder}
-        onDeleteFolder={handleDeleteFolder}
-        onRenameNote={handleRenameNote}
-        onDeleteNote={handleDeleteNote}
-      />
-      {/* 에디터+미리보기 */}
-      <div className="flex flex-1 items-stretch">
+      {/* --- 햄버거 버튼 (접힌 상태에서만 표시) --- */}
+      {sidebarCollapsed && (
+        <button
+          className="fixed top-[91%] left-6 z-50 bg-white shadow-lg border border-indigo-100 rounded-xl p-2 flex items-center justify-center hover:bg-indigo-50 transition"
+          style={{ width: 46, height: 46 }}
+          onClick={() => setSidebarCollapsed(false)}
+          aria-label="사이드바 열기"
+        >
+          <Menu size={26} className="text-indigo-700" />
+        </button>
+      )}
+
+      {/* --- 사이드바 (오버레이처럼, 열렸을 때만 노출) --- */}
+      <AnimatePresence>
+        {!sidebarCollapsed && (
+          <>
+            {/* 오버레이 (뒤 클릭 시 닫힘) */}
+            <motion.div
+              className="fixed inset-0 bg-black/10 z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarCollapsed(true)}
+            />
+            {/* 사이드바 본체 */}
+            <motion.div
+              className="fixed top-0 left-0 z-50 h-full"
+              initial={{ x: -260, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -260, opacity: 0 }}
+              transition={{ type: "spring", bounce: 0.25, duration: 0.22 }}
+              style={{ width: 224, minWidth: 224, maxWidth: 300 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <NoteSidebar
+                collapsed={false}
+                onCollapse={() => setSidebarCollapsed(true)}
+                tree={tree}
+                onSelectNote={handleSelectNote}
+                selectedNoteId={selectedNoteId ?? undefined}
+                onAddNote={handleAddNote}
+                onAddFolder={handleAddFolder}
+                onRenameFolder={handleRenameFolder}
+                onDeleteFolder={handleDeleteFolder}
+                onRenameNote={handleRenameNote}
+                onDeleteNote={handleDeleteNote}
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* --- 에디터+미리보기 패널 --- */}
+      <div className="flex-1 flex flex-row items-stretch min-w-0">
         {/* 👉 미리보기 전용 모드 버튼 */}
         <button
-          className="absolute top-5 right-8 z-20 px-4 py-1.5 rounded-xl bg-indigo-100 text-indigo-700 font-bold shadow hover:bg-indigo-200 transition"
+          className="fixed top-26 right-8 z-20 px-4 py-1.5 rounded-xl bg-indigo-100 text-indigo-700 font-bold shadow hover:bg-indigo-200 transition"
           onClick={() => setPreviewOnly((v) => !v)}
           style={{ minWidth: 90 }}
         >
@@ -386,8 +425,8 @@ export const NotesPage: React.FC = () => {
             </div>
             {noteContent ? (
               <MDEditor.Markdown
-                source={renderContent}                
-                className="prose custom-md-hd break-all" // 👈 핵심!
+                source={renderContent}
+                className="prose custom-md-hd break-all"
                 rehypePlugins={[rehypeKatex]}
                 remarkPlugins={[remarkBreaks, remarkGfm]}
                 style={{ wordBreak: "break-all", background: "white", color: "black" }}
