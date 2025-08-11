@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NoteSidebar } from "./NoteSidebar";
 import MDEditor from "@uiw/react-md-editor";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,88 +9,97 @@ import remarkGfm from "remark-gfm";
 import { Menu } from "lucide-react";
 
 export const NotesPage: React.FC = () => {
+  // ---- 트리(메타)만 메모리에 유지 ----
   const [tree, setTree] = useState<FolderNode[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+
+  // ---- 현재 노트(메타/본문 분리) ----
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteContent, setNoteContent] = useState("");
+  const currentNoteMetaRef = useRef<NoteMeta | null>(null);
+
+  // UI 상태
   const [saved, setSaved] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  // 새 이미지 업로드시 경로 임시 저장
-  const [pendingImages, setPendingImages] = useState<string[]>([]);
-
-  // 이미지 업로드 관련
-  const mdEditorRef = useRef<HTMLDivElement>(null);
-  // 미리보기 스크롤 
-  const previewRef = useRef<HTMLDivElement>(null);
-
-  // 👉 미리보기 전용 모드 상태
   const [previewOnly, setPreviewOnly] = useState(false);
 
+  // 레퍼런스/가드
+  const mdEditorRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const lastLoadedRef = useRef<{ id: string; contentPath?: string } | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastHandleAtRef = useRef<number>(0); // paste/drop re-entrancy guard
+
+  // ===== 초기: 트리(메타)만 로드 =====
   useEffect(() => {
-    window.electronAPI?.loadNote?.().then((data) => {
-      if (data) setTree(data);
-    });
+    (async () => {
+      const meta = await window.electronAPI.loadNoteTree();
+      setTree(meta ?? []);
+    })();
   }, []);
 
-  // 노트 찾기
-  const findCurrentNote = (): NoteMeta | null => {
-    const find = (nodes: FolderNode[]): NoteMeta | null => {
-      for (const node of nodes) {
-        if (node.id === selectedFolderId && node.notes) {
-          const note = node.notes.find((n) => n.id === selectedNoteId);
-          if (note) return note;
-        }
-        if (node.children) {
-          const found = find(node.children);
+  // ===== 유틸: 현재 선택된 노트 메타 찾기 =====
+  const findNoteMeta = useCallback(
+    (folderId: string | null, noteId: string | null): NoteMeta | null => {
+      if (!folderId || !noteId) return null;
+      const stack: FolderNode[] = [...tree];
+      while (stack.length) {
+        const node = stack.pop()!;
+        if (node.id === folderId && node.notes) {
+          const found = node.notes.find((n) => n.id === noteId);
           if (found) return found;
         }
+        if (node.children?.length) stack.push(...node.children);
       }
       return null;
-    };
-    return selectedFolderId && selectedNoteId ? find(tree) : null;
-  };
+    },
+    [tree]
+  );
 
+  // ===== 노트 선택 시: 본문 지연 로드 =====
+  useEffect(() => {
+    const load = async () => {
+      const meta = findNoteMeta(selectedFolderId, selectedNoteId);
+      currentNoteMetaRef.current = meta ?? null;
 
-  // 노트 저장  
-  const handleSave = async (note: NoteMeta) => {
-    try {
-      const updateTree = (nodes: FolderNode[]): FolderNode[] =>
-        nodes.map((node) => {
-          if (node.id === selectedFolderId && node.notes) {
-            return {
-              ...node,
-              notes: node.notes.map((n) =>
-                n.id === selectedNoteId ? { ...n, ...note } : n
-              ),
-            };
-          }
-          if (node.children) {
-            return { ...node, children: updateTree(node.children) };
-          }
-          return node;
-        });
-      const updated = updateTree(tree);
-      setTree(updated);
-      await window.electronAPI?.saveNote?.(updated);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1000);
-      // 저장 성공 시, pendingImages 초기화 (성공한 이미지는 유지)
-      setPendingImages([]);
-    } catch (err) {
-      // 저장 실패시 → 업로드된 이미지 삭제!
-      for (const filePath of pendingImages) {
-        await window.electronAPI?.deleteImageFile?.(filePath);
+      setNoteTitle(meta?.title ?? "");
+      if (!meta) {
+        setNoteContent("");
+        return;
       }
-      setPendingImages([]);
-      alert("노트 저장에 실패했습니다. 업로드된 이미지는 삭제되었습니다.");
-    }
-  };
 
-  // 노트/폴더 관리 함수들
+      // 동일 시그니처면 재로드 스킵
+      const currentSig = { id: meta.id, contentPath: (meta as any).contentPath };
+      if (
+        lastLoadedRef.current &&
+        lastLoadedRef.current.id === currentSig.id &&
+        lastLoadedRef.current.contentPath === currentSig.contentPath
+      ) {
+        return;
+      }
+
+      const content = await window.electronAPI.loadNoteContent({
+        noteId: meta.id,
+        contentPath: (meta as any).contentPath,
+      });
+      setNoteContent(content ?? "");
+      lastLoadedRef.current = currentSig;
+    };
+    load();
+  }, [findNoteMeta, selectedFolderId, selectedNoteId]);
+
+  // ===== 트리 조작 (메타만 저장) =====
+  const persistTree = useCallback(async (next: FolderNode[]) => {
+    setTree(next);
+    await window.electronAPI.saveNoteTree(next);
+  }, []);
+
   const handleSelectNote = (folderId: string, noteId: string) => {
     setSelectedFolderId(folderId);
     setSelectedNoteId(noteId);
   };
+
   const handleAddNote = (folderId: string) => {
     const newId = "note-" + Date.now();
     const update = (nodes: FolderNode[]): FolderNode[] =>
@@ -100,201 +109,297 @@ export const NotesPage: React.FC = () => {
             ...node,
             notes: [
               ...(node.notes ?? []),
-              { id: newId, title: "새 노트", content: "" },
+              { id: newId, title: "새 노트" } as NoteMeta, // 본문은 파일로 관리
             ],
           };
         }
-        if (node.children) {
-          return { ...node, children: update(node.children) };
-        }
-        return node;
+        return node.children ? { ...node, children: update(node.children) } : node;
       });
-    const updated = update(tree);
-    setTree(updated);
-    window.electronAPI?.saveNote?.(updated);
+
+    const next = update(tree);
+    persistTree(next);
     setSelectedFolderId(folderId);
     setSelectedNoteId(newId);
   };
+
   const handleAddFolder = (parentId?: string) => {
     const newId = "cat-" + Date.now();
     const update = (nodes: FolderNode[]): FolderNode[] => {
       if (!parentId) {
-        return [
-          ...nodes,
-          { id: newId, name: "새 폴더", children: [], notes: [] },
-        ];
+        return [...nodes, { id: newId, name: "새 폴더", children: [], notes: [] }];
       }
-      return nodes.map((node) => {
-        if (node.id === parentId) {
-          return {
+      return nodes.map((node) =>
+        node.id === parentId
+          ? {
             ...node,
-            children: [
-              ...(node.children ?? []),
-              { id: newId, name: "새 폴더", children: [], notes: [] },
-            ],
-          };
-        }
-        if (node.children) {
-          return { ...node, children: update(node.children) };
-        }
-        return node;
-      });
-    };
-    const updated = update(tree);
-    setTree(updated);
-    window.electronAPI?.saveNote?.(updated);
-  };
-  const handleRenameFolder = (folderId: string, name: string) => {
-    const update = (nodes: FolderNode[]): FolderNode[] =>
-      nodes.map((node) =>
-        node.id === folderId
-          ? { ...node, name }
+            children: [...(node.children ?? []), { id: newId, name: "새 폴더", children: [], notes: [] }],
+          }
           : node.children
             ? { ...node, children: update(node.children) }
             : node
       );
-    const updated = update(tree);
-    setTree(updated);
-    window.electronAPI?.saveNote?.(updated);
+    };
+    persistTree(update(tree));
   };
+
+  const handleRenameFolder = (folderId: string, name: string) => {
+    const update = (nodes: FolderNode[]): FolderNode[] =>
+      nodes.map((node) =>
+        node.id === folderId ? { ...node, name } : node.children ? { ...node, children: update(node.children) } : node
+      );
+    persistTree(update(tree));
+  };
+
   const handleDeleteFolder = (folderId: string) => {
     const remove = (nodes: FolderNode[]): FolderNode[] =>
       nodes
-        .filter((node) => node.id !== folderId)
-        .map((node) =>
-          node.children ? { ...node, children: remove(node.children) } : node
-        );
-    const updated = remove(tree);
-    setTree(updated);
-    window.electronAPI?.saveNote?.(updated);
+        .filter((n) => n.id !== folderId)
+        .map((n) => (n.children ? { ...n, children: remove(n.children) } : n));
+    const next = remove(tree);
+    persistTree(next);
     if (selectedFolderId === folderId) setSelectedFolderId(null);
-    if (findCurrentNote()?.id === selectedNoteId) setSelectedNoteId(null);
+    if (currentNoteMetaRef.current?.id === selectedNoteId) setSelectedNoteId(null);
   };
+
   const handleRenameNote = (folderId: string, noteId: string, title: string) => {
     const update = (nodes: FolderNode[]): FolderNode[] =>
       nodes.map((node) => {
         if (node.id === folderId && node.notes) {
           return {
             ...node,
-            notes: node.notes.map((n) =>
-              n.id === noteId ? { ...n, title } : n
-            ),
+            notes: node.notes.map((n) => (n.id === noteId ? { ...n, title } : n)),
           };
         }
-        if (node.children) {
-          return { ...node, children: update(node.children) };
-        }
-        return node;
+        return node.children ? { ...node, children: update(node.children) } : node;
       });
-    const updated = update(tree);
-    setTree(updated);
-    window.electronAPI?.saveNote?.(updated);
+    persistTree(update(tree));
+    if (selectedNoteId === noteId) setNoteTitle(title);
   };
+
   const handleDeleteNote = (folderId: string, noteId: string) => {
     const update = (nodes: FolderNode[]): FolderNode[] =>
       nodes.map((node) => {
         if (node.id === folderId && node.notes) {
-          return {
-            ...node,
-            notes: node.notes.filter((n) => n.id !== noteId),
-          };
+          return { ...node, notes: node.notes.filter((n) => n.id !== noteId) };
         }
-        if (node.children) {
-          return { ...node, children: update(node.children) };
-        }
-        return node;
+        return node.children ? { ...node, children: update(node.children) } : node;
       });
-    const updated = update(tree);
-    setTree(updated);
-    window.electronAPI?.saveNote?.(updated);
+    const next = update(tree);
+    persistTree(next);
     if (selectedNoteId === noteId) setSelectedNoteId(null);
   };
 
-  // 현재 노트 상태 관리
-  const currentNote = findCurrentNote();
-  const [noteTitle, setNoteTitle] = useState("");
-  const [noteContent, setNoteContent] = useState("");
-  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
-  useEffect(() => {
-    if (!currentNote) return;
-
-    // 기존 타이머 있으면 취소
-    if (autoSaveTimer) clearTimeout(autoSaveTimer);
-
-    // 타이핑 멈춘 뒤 1초 후 저장
-    const timer = setTimeout(() => {
-      // 제목이나 내용이 실제로 바뀐 경우에만 저장
-      if (noteTitle !== currentNote.title || noteContent !== currentNote.content) {
-        handleSave({ id: currentNote.id, title: noteTitle, content: noteContent });
+  // ===== 본문 저장 (지연 저장 & 파일만 저장) =====
+  function updateNoteContentPathInTree(
+    nodes: FolderNode[],
+    noteId: string,
+    newPath: string
+  ): FolderNode[] {
+    return nodes.map((node) => {
+      let notes = node.notes;
+      if (notes && notes.length) {
+        notes = notes.map((n) => (n.id === noteId ? { ...n, contentPath: newPath } : n));
       }
-    }, 15000);
-
-    setAutoSaveTimer(timer);
-
-    // 언마운트 시 타이머 클리어
-    return () => clearTimeout(timer);
-  }, [noteTitle, noteContent]);
-
-
-  useEffect(() => {
-    setNoteTitle(currentNote?.title ?? "");
-    setNoteContent(currentNote?.content ?? "");
-  }, [selectedNoteId, currentNote]);
-
-  // ----- 📎 파일 업로드 지원 -----
-  useEffect(() => {
-    if (!mdEditorRef.current) return;
-    const editor = mdEditorRef.current;
-
-    // 이미지 파일 드롭/붙여넣기 시 자동 업로드 및 마크다운 입력
-    const onDropOrPaste = async (e: any) => {
-      let files = null;
-      if ("clipboardData" in e && e.clipboardData?.files?.length) {
-        files = e.clipboardData.files;
-      } else if ("dataTransfer" in e && e.dataTransfer?.files?.length) {
-        files = e.dataTransfer.files;
+      let children = node.children;
+      if (children && children.length) {
+        children = updateNoteContentPathInTree(children, noteId, newPath);
       }
-      if (files && files.length > 0) {
-        e.preventDefault();
-        const file = files[0];
-        if (!file.type.startsWith("image/")) return;
-        const result = await window.electronAPI?.saveImageFile?.(file);
-        let url = result?.filePath;
-        if (url) {
-          // 윈도우 경로를 file:///로 바꿔서 넣기
-          if (!/^file:\/\//.test(url)) url = "file:///" + url.replace(/\\/g, "/");
-          setNoteContent((prev) => (prev ?? "") + `\n\n![](${url})\n`);
+      return { ...node, ...(notes ? { notes } : {}), ...(children ? { children } : {}) };
+    });
+  }
+
+  const scheduleSaveContent = useCallback(
+    (immediate = false) => {
+      const meta = currentNoteMetaRef.current;
+      if (!meta) return;
+
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+
+      const run = async () => {
+        const { contentPath: newPath } = await window.electronAPI.saveNoteContent({
+          noteId: meta.id,
+          content: noteContent,
+          contentPath: (meta as any).contentPath,
+        });
+
+        if ((meta as any).contentPath === newPath) {
+          setSaved(true);
+          setTimeout(() => setSaved(false), 900);
+          return;
+        }
+
+        (meta as any).contentPath = newPath;
+
+        setTree((prev) => updateNoteContentPathInTree(prev, meta.id, newPath));
+
+        // contentPath 갱신 시에만 트리 저장
+        await window.electronAPI.saveNoteTree(await window.electronAPI.loadNoteTree());
+
+        setSaved(true);
+        setTimeout(() => setSaved(false), 900);
+
+        if (lastLoadedRef.current?.id === meta.id) {
+          lastLoadedRef.current = { id: meta.id, contentPath: newPath };
+        }
+      };
+
+      if (immediate) run();
+      else saveTimerRef.current = setTimeout(run, 10000);
+    },
+    [noteContent]
+  );
+
+  useEffect(() => {
+    if (!currentNoteMetaRef.current) return;
+    scheduleSaveContent(false);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [noteContent, scheduleSaveContent]);
+
+  const forceSave = useCallback(() => scheduleSaveContent(true), [scheduleSaveContent]);
+
+  // ===== 📎 이미지 드롭/붙여넣기 (입력 노드 의존 X, 캡처 레벨에서 안정 처리) =====
+  useEffect(() => {
+    const root = mdEditorRef.current;
+    if (!root) return;
+
+    const isReentry = (ts?: number) => {
+      const now = ts ?? Date.now();
+      if (now - lastHandleAtRef.current < 120) return true;
+      lastHandleAtRef.current = now;
+      return false;
+    };
+
+    // 파일 또는 URL 추출
+    const pickImageOrUrl = (e: any): { file?: File; url?: string } | null => {
+      // clipboard items
+      const items = e.clipboardData?.items;
+      if (items && items.length) {
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i];
+          if (it.kind === "file") {
+            const f = it.getAsFile?.();
+            if (f && f.type?.startsWith("image/")) return { file: f };
+          }
         }
       }
+      // clipboard files
+      const cfiles = e.clipboardData?.files;
+      if (cfiles?.length && cfiles[0].type?.startsWith("image/")) return { file: cfiles[0] };
+
+      // drag & drop items
+      const dtItems = e.dataTransfer?.items;
+      if (dtItems && dtItems.length) {
+        for (let i = 0; i < dtItems.length; i++) {
+          const it = dtItems[i];
+          if (it.kind === "file") {
+            const f = it.getAsFile?.();
+            if (f && f.type?.startsWith("image/")) return { file: f };
+          }
+        }
+      }
+      // drag & drop files
+      const dfiles = e.dataTransfer?.files;
+      if (dfiles?.length && dfiles[0].type?.startsWith("image/")) return { file: dfiles[0] };
+
+      // 브라우저에서 이미지 URL 드롭
+      const uri = e.dataTransfer?.getData?.("text/uri-list");
+      if (uri && /^https?:\/\//i.test(uri)) return { url: uri };
+
+      return null;
     };
 
-    editor.addEventListener("drop", onDropOrPaste);
-    editor.addEventListener("paste", onDropOrPaste);
+    const insertMarkdown = (url: string) => {
+      if (!/^file:\/\//.test(url) && /^[A-Za-z]:[\\/]/.test(url)) {
+        url = "file:///" + url.replace(/\\/g, "/");
+      }
+      setNoteContent((prev) => (prev ?? "") + `\n\n![](${url})\n`);
+    };
+
+    const saveThenInsert = async (file: File) => {
+      console.log(file);
+      const { filePath } = await window.electronAPI.saveImageFile(file);
+      let url = filePath;
+      if (url && !/^file:\/\//.test(url)) url = "file:///" + url.replace(/\\/g, "/");
+      insertMarkdown(url);
+    };
+
+    // 문서 캡처: paste
+    const onPasteDocCapture = async (e: ClipboardEvent) => {
+      // 원래는 mdEditorRef 안쪽만 허용했지만 → 모든 경우 허용
+      const picked = pickImageOrUrl(e);
+      if (!picked) return;
+      if (isReentry((e as any).timeStamp)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      try {
+        if (picked.file) await saveThenInsert(picked.file);
+        else if (picked.url) insertMarkdown(picked.url);
+      } catch (err) {
+        console.error("paste save failed:", err);
+      }
+    };
+
+    // 윈도우 캡처: drop
+    const onWindowDropCapture = async (e: DragEvent) => {
+      const picked = pickImageOrUrl(e);
+      if (!picked) return;
+      if (isReentry((e as any).timeStamp)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      try {
+        if (picked.file) await saveThenInsert(picked.file);
+        else if (picked.url) insertMarkdown(picked.url);
+      } catch (err) {
+        console.error("drop save failed:", err);
+      }
+    };
+
+
+    // OS 네비게이션 방지 + 에디터 기본 드롭 방지
+    const preventWindowNav = (e: DragEvent) => e.preventDefault();
+    window.addEventListener("dragover", preventWindowNav, false);
+    window.addEventListener("drop", preventWindowNav, false);
+    const preventOnEditor = (e: DragEvent) => e.preventDefault();
+    root.addEventListener("dragover", preventOnEditor);
+    root.addEventListener("drop", preventOnEditor);
+
+    document.addEventListener("paste", onPasteDocCapture as any, true);
+    window.addEventListener("drop", onWindowDropCapture as any, true);
 
     return () => {
-      editor.removeEventListener("drop", onDropOrPaste);
-      editor.removeEventListener("paste", onDropOrPaste);
+      window.removeEventListener("dragover", preventWindowNav, false);
+      window.removeEventListener("drop", preventWindowNav, false);
+      root.removeEventListener("dragover", preventOnEditor);
+      root.removeEventListener("drop", preventOnEditor);
+      document.removeEventListener("paste", onPasteDocCapture as any, true);
+      window.removeEventListener("drop", onWindowDropCapture as any, true);
     };
-    // eslint-disable-next-line
   }, [mdEditorRef.current]);
 
-
+  // 미리보기 스크롤 아래 고정
   useEffect(() => {
     if (previewRef.current) {
       previewRef.current.scrollTop = previewRef.current.scrollHeight;
     }
   }, [noteContent]);
 
-  // 미리보기에서 C:\로 시작하는 경로 자동 치환
-  const renderContent =
-    noteContent.replace(
+  // 미리보기용 경로 치환(C:\ → file:///)
+  const renderContent = useMemo(() => {
+    return (noteContent ?? "").replace(
       /!\[(.*?)\]\((C:[^)]+)\)/g,
-      (match, alt, p1) => `![${alt}](file:///${p1.replace(/\\/g, "/")})`
+      (_m, alt, p1) => `![${alt}](file:///${p1.replace(/\\/g, "/")})`
     );
+  }, [noteContent]);
 
-    return (
+  return (
     <div className="flex w-full h-full bg-gradient-to-br from-white to-indigo-50 relative">
-      {/* --- 햄버거 버튼 (접힌 상태에서만 표시) --- */}
+      {/* 햄버거 버튼 */}
       {sidebarCollapsed && (
         <button
           className="fixed top-[91%] left-6 z-50 bg-white shadow-lg border border-indigo-100 rounded-xl p-2 flex items-center justify-center hover:bg-indigo-50 transition"
@@ -306,11 +411,10 @@ export const NotesPage: React.FC = () => {
         </button>
       )}
 
-      {/* --- 사이드바 (오버레이처럼, 열렸을 때만 노출) --- */}
+      {/* 사이드바 (오버레이) */}
       <AnimatePresence>
         {!sidebarCollapsed && (
           <>
-            {/* 오버레이 (뒤 클릭 시 닫힘) */}
             <motion.div
               className="fixed inset-0 bg-black/10 z-40"
               initial={{ opacity: 0 }}
@@ -318,7 +422,6 @@ export const NotesPage: React.FC = () => {
               exit={{ opacity: 0 }}
               onClick={() => setSidebarCollapsed(true)}
             />
-            {/* 사이드바 본체 */}
             <motion.div
               className="fixed top-0 left-0 z-50 h-full"
               initial={{ x: -260, opacity: 0 }}
@@ -326,7 +429,7 @@ export const NotesPage: React.FC = () => {
               exit={{ x: -260, opacity: 0 }}
               transition={{ type: "spring", bounce: 0.25, duration: 0.22 }}
               style={{ width: 224, minWidth: 224, maxWidth: 300 }}
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <NoteSidebar
                 collapsed={false}
@@ -346,9 +449,8 @@ export const NotesPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* --- 에디터+미리보기 패널 --- */}
+      {/* 에디터 + 미리보기 */}
       <div className="flex-1 flex flex-row items-stretch min-w-0">
-        {/* 👉 미리보기 전용 모드 버튼 */}
         <button
           className="fixed top-26 right-8 z-20 px-4 py-1.5 rounded-xl bg-indigo-100 text-indigo-700 font-bold shadow hover:bg-indigo-200 transition"
           onClick={() => setPreviewOnly((v) => !v)}
@@ -360,7 +462,7 @@ export const NotesPage: React.FC = () => {
         {/* 에디터 */}
         {!previewOnly && (
           <div className="flex-1 min-w-0 p-6 flex flex-col relative" style={{ flexBasis: "50%" }}>
-            {currentNote ? (
+            {selectedNoteId ? (
               <motion.div
                 className="bg-white rounded-2xl shadow-xl p-6 flex flex-col gap-2 relative h-full"
                 initial={{ opacity: 0, y: 20, scale: 0.97 }}
@@ -369,7 +471,13 @@ export const NotesPage: React.FC = () => {
                 <input
                   type="text"
                   value={noteTitle}
-                  onChange={(e) => setNoteTitle(e.target.value)}
+                  onChange={(e) => {
+                    const title = e.target.value;
+                    setNoteTitle(title);
+                    const meta = currentNoteMetaRef.current;
+                    if (!meta) return;
+                    handleRenameNote(selectedFolderId!, meta.id, title);
+                  }}
                   className="text-2xl font-extrabold mb-2 bg-transparent border-b border-indigo-200 focus:outline-none focus:border-indigo-500"
                   style={{ wordBreak: "break-all" }}
                 />
@@ -382,25 +490,28 @@ export const NotesPage: React.FC = () => {
                   <MDEditor
                     value={noteContent}
                     onChange={(v) => setNoteContent(v ?? "")}
-                    height={'100%'}
+                    height={"100%"}
                     preview="edit"
                     visibleDragbar={false}
                   />
                 </div>
-                <motion.button
-                  whileHover={{ scale: 1.07 }}
-                  className="self-end px-5 py-2 bg-indigo-600 text-white rounded-xl shadow font-bold mt-2"
-                  onClick={() => handleSave({ id: currentNote.id, title: noteTitle, content: noteContent })}
-                >
-                  저장
-                </motion.button>
+                <div className="flex justify-end gap-2 mt-2">
+                  <motion.button
+                    whileHover={{ scale: 1.07 }}
+                    className="px-5 py-2 bg-indigo-600 text-white rounded-xl shadow font-bold"
+                    onClick={forceSave}
+                  >
+                    저장
+                  </motion.button>
+                </div>
+
                 <AnimatePresence>
                   {saved && (
                     <motion.div
                       initial={{ opacity: 0, y: 0 }}
                       animate={{ opacity: 1, y: -30 }}
                       exit={{ opacity: 0 }}
-                      className="absolute top-2 right-8 bg-green-400 text-white rounded-lg shadow-lg px-4 py-2"
+                      className="absolute top-2 right-8 bg-green-500 text-white rounded-lg shadow-lg px-4 py-2"
                     >
                       저장됨!
                     </motion.div>
@@ -432,9 +543,7 @@ export const NotesPage: React.FC = () => {
                 style={{ wordBreak: "break-all", background: "white", color: "black" }}
               />
             ) : (
-              <div className="text-gray-300 text-center py-20">
-                노트 내용이 없습니다
-              </div>
+              <div className="text-gray-300 text-center py-20">노트 내용이 없습니다</div>
             )}
           </div>
         </div>
