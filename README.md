@@ -1,69 +1,47 @@
-# React + TypeScript + Vite
+# Note
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+로컬 퍼스트 노트/플래시카드/캘린더를 한 앱에서 관리하는 Electron 데스크톱 앱입니다.
 
-Currently, two official plugins are available:
+## 핵심 기능
+- 폴더 트리 기반 노트 관리 (메타/본문 분리 저장)
+- Markdown 편집/미리보기, GFM/KaTeX 지원
+- 이미지 붙여넣기/드래그 앤 드롭 저장 후 자동 삽입
+- 자동 저장 + 수동 저장, 미리보기 전용 모드
+- 플래시카드 폴더/카드 CRUD, 질문/답변 플립
+- 월간 캘린더, 일정 유형/중요 표시, 멀티데이 일정
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 구현 포인트
+- 노트 본문을 `notes/*.md`, 메타를 `notes-meta.json`으로 분리해 대용량 데이터에도 안정적으로 동작
+- 이미지 리소스를 로컬에 저장하고, 미사용 파일을 주기적으로 정리
+- Electron `userData` 하위에 데이터 저장하여 OS별 표준 경로 사용
 
-## Expanding the ESLint configuration
+## 기술 스택
+- Electron, React, TypeScript, Vite
+- Tailwind CSS, Framer Motion
+- Markdown: @uiw/react-md-editor, remark-gfm, rehype-katex
+- date-fns, lucide-react
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 실행 방법
+### 준비
+- Node.js 18+ (권장)
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 설치/실행
+```bash
+npm install
+npm run build
+npm run electron
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 개발 모드
+```bash
+npm run dev
+```
+- Electron에서 Vite HMR을 쓰려면 `src/main/main.cjs`의 `win.loadURL('http://localhost:5173')`을 활성화하고 `loadFile`을 비활성화하세요.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## 폴더 구조
+```text
+src/
+  main/        # Electron main/preload
+  components/  # UI
+  assets/
 ```
